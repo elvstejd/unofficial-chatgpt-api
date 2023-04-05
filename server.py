@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 
 APP = flask.Flask(__name__)
 PLAY = sync_playwright().start()
-BROWSER = PLAY.chromium.launch_persistent_context(
+BROWSER = PLAY.firefox.launch_persistent_context(
     user_data_dir="/tmp/playwright",
     headless=False,
 )
@@ -26,8 +26,8 @@ def is_logged_in():
     return get_input_box() is not None
 
 def is_loading_response() -> bool:
-    """See if the send button is diabled, if it does, we're not loading"""
-    return not PAGE.query_selector("textarea ~ button").is_enabled()
+    """See if the regenerate button exists if it does, we're not loading"""
+    return not PAGE.get_by_text('Regenerate response').is_visible()
 
 def send_message(message):
     # Send the message
@@ -39,10 +39,11 @@ def send_message(message):
 def get_last_message():
     """Get the latest message"""
     while is_loading_response():
+        print('Response is loading. Waiting')
         time.sleep(0.25)
-    page_elements = PAGE.query_selector_all("div[class*='request-:']")
-    last_element = page_elements.pop()
-    return last_element.inner_text()
+    responses = PAGE.query_selector_all(".markdown.prose")
+    last_reponse = responses.pop()
+    return last_reponse.inner_text()
 
 def regenerate_response():
     """Clicks on the Try again button.
@@ -56,14 +57,14 @@ def get_reset_button():
     """Returns the reset thread button (it is an a tag not a button)"""
     return PAGE.query_selector("a:has-text('Reset thread')")
 
-@APP.route("/chat", methods=["GET"]) #TODO: make this a POST
+@APP.route("/chat", methods=["POST"])
 def chat():
-    message = flask.request.args.get("q")
+    message = flask.request.get_json().get('query')
     print("Sending message: ", message)
     send_message(message)
     response = get_last_message()
     print("Response: ", response)
-    return response
+    return { 'response': response }
 
 # create a route for regenerating the response
 @APP.route("/regenerate", methods=["POST"])
